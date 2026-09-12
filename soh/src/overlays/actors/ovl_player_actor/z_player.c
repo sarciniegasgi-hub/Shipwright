@@ -5822,9 +5822,6 @@ void func_8083AA10(Player* this, PlayState* play) {
                             return;
                         }
                     }
-
-                    func_8083A4A8(this, play);
-                    return;
                 }
 
                 if ((sPrevFloorProperty == FLOOR_PROPERTY_9) || (sYDistToFloor <= this->ageProperties->unk_34) ||
@@ -6308,7 +6305,8 @@ void Player_SetupRoll(Player* this, PlayState* play) {
 }
 
 // Moon jump mod: launching speed of the upward jump that replaces the running roll.
-#define MOONJUMP_VELOCITY_Y 10.0f
+// v=9.8 -> apex = v^2 / 2g = 9.8^2 / 2.4 = ~40 units
+#define MOONJUMP_VELOCITY_Y 9.8f
 
 void Player_SetupMoonJump(Player* this, PlayState* play) {
     Player_SetupAction(play, this, Player_Action_8084411C, 1);
