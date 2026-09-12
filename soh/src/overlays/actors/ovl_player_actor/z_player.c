@@ -6308,7 +6308,7 @@ void Player_SetupRoll(Player* this, PlayState* play) {
 }
 
 // Moon jump mod: launching speed of the upward jump that replaces the running roll.
-#define MOONJUMP_VELOCITY_Y 11.0f
+#define MOONJUMP_VELOCITY_Y 10.0f
 
 void Player_SetupMoonJump(Player* this, PlayState* play) {
     Player_SetupAction(play, this, Player_Action_8084411C, 1);
