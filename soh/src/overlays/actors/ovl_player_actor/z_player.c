@@ -6307,9 +6307,25 @@ void Player_SetupRoll(Player* this, PlayState* play) {
     gSaveContext.ship.stats.count[COUNT_ROLLS]++;
 }
 
+// Moon jump mod: launching speed of the upward jump that replaces the running roll.
+#define MOONJUMP_VELOCITY_Y 16.0f
+
+void Player_SetupMoonJump(Player* this, PlayState* play) {
+    Player_SetupAction(play, this, Player_Action_8084411C, 1);
+    Player_AnimPlayOnce(play, this, &gPlayerAnim_link_normal_run_jump);
+
+    this->actor.velocity.y = MOONJUMP_VELOCITY_Y;
+    this->actor.bgCheckFlags &= ~BGCHECKFLAG_GROUND;
+    this->stateFlags3 |= PLAYER_STATE3_MIDAIR;
+    this->hoverBootsTimer = 0;
+
+    Player_PlayJumpingSfx(this);
+    Player_PlayVoiceSfx(this, NA_SE_VO_LI_AUTO_JUMP);
+}
+
 s32 Player_TryRoll(Player* this, PlayState* play) {
     if ((this->controlStickDirections[this->controlStickDataIndex] == 0) && (sFloorType != 7)) {
-        Player_SetupRoll(this, play);
+        Player_SetupMoonJump(this, play);
 
         return true;
     }
