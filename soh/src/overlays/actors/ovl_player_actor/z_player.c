@@ -2530,6 +2530,13 @@ void Player_ProcessItemButtons(Player* this, PlayState* play) {
             }
         }
 
+        // Sprint mod: a single press of the sprint button (C-right) sheathes the current weapon.
+        if (CHECK_BTN_ALL(sControlInput->press.button, BTN_CRIGHT) && (this->putAwayCooldownTimer == 0) &&
+            (this->heldItemAction >= PLAYER_IA_SWORD_MASTER)) {
+            Player_UseItem(play, this, ITEM_NONE);
+            return;
+        }
+
         for (i = 0; i < ARRAY_COUNT(sItemButtons); i++) {
             if (CHECK_BTN_ALL(sControlInput->press.button, sItemButtons[i])) {
                 break;
@@ -6306,6 +6313,9 @@ void Player_SetupRoll(Player* this, PlayState* play) {
 // Sprint mod: speed multiplier applied to the run speed target while holding C-right.
 #define SPRINT_RUN_SPEED_FACTOR 1.55f
 
+// Sprint mod: MMX run animation used instead of the vanilla run cycle while sprinting.
+static const ALIGN_ASSET(2) char gSohMmxRunAnimPath[] = "__OTR__objects/gameplay_keep/gPlayerAnim_mmx_run_free";
+
 void Player_SetupMoonJump(Player* this, PlayState* play) {
     Player_SetupAction(play, this, Player_Action_8084411C, 1);
     Player_AnimPlayOnce(play, this, &gPlayerAnim_link_normal_run_jump);
@@ -6320,7 +6330,10 @@ void Player_SetupMoonJump(Player* this, PlayState* play) {
 }
 
 s32 Player_TryRoll(Player* this, PlayState* play) {
-    if ((this->controlStickDirections[this->controlStickDataIndex] == 0) && (sFloorType != 7)) {
+    // Sprint mod: allow jumping in place (neutral stick) as well as forward.
+    s32 stickDir = this->controlStickDirections[this->controlStickDataIndex];
+
+    if (((stickDir == PLAYER_STICK_DIR_FORWARD) || (stickDir == PLAYER_STICK_DIR_NONE)) && (sFloorType != 7)) {
         Player_SetupMoonJump(this, play);
 
         return true;
@@ -8857,7 +8870,12 @@ void func_80841EE4(Player* this, PlayState* play) {
 
             func_80841CC4(this, 1, play);
 
-            LinkAnimation_LoadToJoint(play, &this->skelAnime, func_80833438(this), this->unk_868 * (20.0f / 29.0f));
+            // Sprint mod: use the MMX run animation while the sprint button (C-right) is held.
+            LinkAnimation_LoadToJoint(play, &this->skelAnime,
+                                      CHECK_BTN_ALL(sControlInput->cur.button, BTN_CRIGHT) && !Player_IsZTargeting(this)
+                                          ? (LinkAnimationHeader*)gSohMmxRunAnimPath
+                                          : func_80833438(this),
+                                      this->unk_868 * (20.0f / 29.0f));
         }
     }
 
