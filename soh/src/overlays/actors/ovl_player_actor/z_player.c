@@ -9700,6 +9700,29 @@ void Player_Action_8084411C(Player* this, PlayState* play) {
                         this->av2.actionVar2 = -2;
                         func_80843E14(this, NA_SE_VO_LI_FALL_L);
                     }
+
+                    // Climb mod: while falling, keep the ability to grab a ledge at climbing height
+                    // (jump_climb_hold hang) so Link can still climb up ("subir"). The tall-ledge grab
+                    // (yDistToLedge >= 150.0f) and the walk-off-edge hang (func_8083A6AC) stay disabled.
+                    if ((this->actor.bgCheckFlags & BGCHECKFLAG_PLAYER_WALL_INTERACT) &&
+                        !(this->stateFlags2 & PLAYER_STATE2_HOPPING) &&
+                        !(this->stateFlags1 & (PLAYER_STATE1_CARRYING_ACTOR | PLAYER_STATE1_IN_WATER)) &&
+                        (this->linearVelocity > 0.0f) && (this->ledgeClimbType >= 2) &&
+                        (this->yDistToLedge < 150.0f) &&
+                        (((this->actor.world.pos.y - this->actor.floorHeight) + this->yDistToLedge) >
+                         (70.0f * this->ageProperties->unk_08))) {
+                        AnimationContext_DisableQueue(play);
+                        if (this->stateFlags1 & PLAYER_STATE1_HOOKSHOT_FALLING) {
+                            Player_PlayVoiceSfx(this, NA_SE_VO_LI_HOOKSHOT_HANG);
+                        } else {
+                            Player_PlayVoiceSfx(this, NA_SE_VO_LI_HANG);
+                        }
+                        this->actor.world.pos.y += this->yDistToLedge;
+                        func_8083A5C4(play, this, this->actor.wallPoly, this->distToInteractWall,
+                                      GET_PLAYER_ANIM(PLAYER_ANIMGROUP_jump_climb_hold, this->modelAnimType));
+                        this->actor.shape.rot.y = this->yaw += 0x8000;
+                        this->stateFlags1 |= PLAYER_STATE1_HANGING_OFF_LEDGE;
+                    }
                 }
             }
         }

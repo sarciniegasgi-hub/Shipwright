@@ -238,6 +238,10 @@ jobs:
         mv _packages/*.zip _packages/soh-windows.zip
     - name: Unzip package
       run: Expand-Archive -Path _packages/soh-windows.zip -DestinationPath soh-windows
+    - name: Bundle mods
+      run: |
+        New-Item -ItemType Directory -Path soh-windows/mods -Force | Out-Null
+        Copy-Item "soh-windows-mods/*.o2r" soh-windows/mods/
     - name: Upload build
       uses: actions/upload-artifact@v7
       with:
