@@ -2530,6 +2530,13 @@ void Player_ProcessItemButtons(Player* this, PlayState* play) {
             }
         }
 
+        // Sprint mod: a single press of the sprint button (C-right) sheathes the current weapon.
+        if (CHECK_BTN_ALL(sControlInput->press.button, BTN_CRIGHT) && (this->putAwayCooldownTimer == 0) &&
+            (this->heldItemAction >= PLAYER_IA_SWORD_MASTER)) {
+            Player_UseItem(play, this, ITEM_NONE);
+            return;
+        }
+
         for (i = 0; i < ARRAY_COUNT(sItemButtons); i++) {
             if (CHECK_BTN_ALL(sControlInput->press.button, sItemButtons[i])) {
                 break;
@@ -5723,10 +5730,8 @@ s32 func_8083A6AC(Player* this, PlayState* play) {
                 sp50 = 1;
             }
 
-            func_8083A5C4(play, this, sp84, sp54,
-                          sp50 ? &gPlayerAnim_link_normal_Fclimb_startB : &gPlayerAnim_link_normal_fall);
-
             if (sp50) {
+                func_8083A5C4(play, this, sp84, sp54, &gPlayerAnim_link_normal_Fclimb_startB);
                 Player_SetupWaitForPutAway(play, this, func_8083A3B0);
 
                 this->yaw += 0x8000;
@@ -5737,14 +5742,11 @@ s32 func_8083A6AC(Player* this, PlayState* play) {
 
                 this->av2.actionVar2 = -1;
                 this->av1.actionVar1 = sp50;
-            } else {
-                this->stateFlags1 |= PLAYER_STATE1_HANGING_OFF_LEDGE;
-                this->stateFlags1 &= ~PLAYER_STATE1_PARALLEL;
-            }
 
-            Player_PlaySfx(this, NA_SE_PL_SLIPDOWN);
-            Player_PlayVoiceSfx(this, NA_SE_VO_LI_HANG);
-            return 1;
+                Player_PlaySfx(this, NA_SE_PL_SLIPDOWN);
+                Player_PlayVoiceSfx(this, NA_SE_VO_LI_HANG);
+                return 1;
+            }
         }
     }
 
@@ -5822,9 +5824,6 @@ void func_8083AA10(Player* this, PlayState* play) {
                             return;
                         }
                     }
-
-                    func_8083A4A8(this, play);
-                    return;
                 }
 
                 if ((sPrevFloorProperty == FLOOR_PROPERTY_9) || (sYDistToFloor <= this->ageProperties->unk_34) ||
@@ -6307,9 +6306,35 @@ void Player_SetupRoll(Player* this, PlayState* play) {
     gSaveContext.ship.stats.count[COUNT_ROLLS]++;
 }
 
+// Moon jump mod: launching speed of the upward jump that replaces the running roll.
+// v=9.8 -> apex = v^2 / 2g = 9.8^2 / 2.4 = ~40 units
+#define MOONJUMP_VELOCITY_Y 9.8f
+
+// Sprint mod: speed multiplier applied to the run speed target while holding C-right.
+#define SPRINT_RUN_SPEED_FACTOR 1.55f
+
+// Sprint mod: MMX run animation used instead of the vanilla run cycle while sprinting.
+static const ALIGN_ASSET(2) char gSohMmxRunAnimPath[] = "__OTR__objects/gameplay_keep/gPlayerAnim_mmx_run_free";
+
+void Player_SetupMoonJump(Player* this, PlayState* play) {
+    Player_SetupAction(play, this, Player_Action_8084411C, 1);
+    Player_AnimPlayOnce(play, this, &gPlayerAnim_link_normal_run_jump);
+
+    this->actor.velocity.y = MOONJUMP_VELOCITY_Y;
+    this->actor.bgCheckFlags &= ~BGCHECKFLAG_GROUND;
+    this->stateFlags3 |= PLAYER_STATE3_MIDAIR;
+    this->hoverBootsTimer = 0;
+
+    Player_PlayJumpingSfx(this);
+    Player_PlayVoiceSfx(this, NA_SE_VO_LI_AUTO_JUMP);
+}
+
 s32 Player_TryRoll(Player* this, PlayState* play) {
-    if ((this->controlStickDirections[this->controlStickDataIndex] == 0) && (sFloorType != 7)) {
-        Player_SetupRoll(this, play);
+    // Sprint mod: allow jumping in place (neutral stick) as well as forward.
+    s32 stickDir = this->controlStickDirections[this->controlStickDataIndex];
+
+    if (((stickDir == PLAYER_STICK_DIR_FORWARD) || (stickDir == PLAYER_STICK_DIR_NONE)) && (sFloorType != 7)) {
+        Player_SetupMoonJump(this, play);
 
         return true;
     }
@@ -8845,7 +8870,12 @@ void func_80841EE4(Player* this, PlayState* play) {
 
             func_80841CC4(this, 1, play);
 
-            LinkAnimation_LoadToJoint(play, &this->skelAnime, func_80833438(this), this->unk_868 * (20.0f / 29.0f));
+            // Sprint mod: use the MMX run animation while the sprint button (C-right) is held.
+            LinkAnimation_LoadToJoint(play, &this->skelAnime,
+                                      CHECK_BTN_ALL(sControlInput->cur.button, BTN_CRIGHT) && !Player_IsZTargeting(this)
+                                          ? (LinkAnimationHeader*)gSohMmxRunAnimPath
+                                          : func_80833438(this),
+                                      this->unk_868 * (20.0f / 29.0f));
         }
     }
 
@@ -8871,6 +8901,12 @@ void Player_Action_80842180(Player* this, PlayState* play) {
 
         if (!func_8083C484(this, &speedTarget, &yawTarget)) {
             if (GameInteractor_Should(VB_PLAYER_MODIFY_RUN_SPEED, true, this, &speedTarget, &yawTarget)) {
+                // Sprint mod: while holding C-right, multiply the run speed target so Link runs
+                // faster. The run cycle animation is already scaled by linearVelocity (see
+                // func_80841EE4), so the running animation speeds up together with the movement.
+                if (CHECK_BTN_ALL(sControlInput->cur.button, BTN_CRIGHT)) {
+                    speedTarget *= SPRINT_RUN_SPEED_FACTOR;
+                }
                 func_8083DF68(this, speedTarget, yawTarget);
                 func_8083DDC8(this, play);
             };
@@ -9683,29 +9719,27 @@ void Player_Action_8084411C(Player* this, PlayState* play) {
                         func_80843E14(this, NA_SE_VO_LI_FALL_L);
                     }
 
-                    if (!GameInteractor_GetDisableLedgeGrabsActive() &&
-                        (this->actor.bgCheckFlags & BGCHECKFLAG_PLAYER_WALL_INTERACT) &&
+                    // Climb mod: while falling, keep the ability to grab a ledge at climbing height
+                    // (jump_climb_hold hang) so Link can still climb up ("subir"). The tall-ledge grab
+                    // (yDistToLedge >= 150.0f) and the walk-off-edge hang (func_8083A6AC) stay disabled.
+                    if ((this->actor.bgCheckFlags & BGCHECKFLAG_PLAYER_WALL_INTERACT) &&
                         !(this->stateFlags2 & PLAYER_STATE2_HOPPING) &&
                         !(this->stateFlags1 & (PLAYER_STATE1_CARRYING_ACTOR | PLAYER_STATE1_IN_WATER)) &&
-                        (this->linearVelocity > 0.0f)) {
-                        if ((this->yDistToLedge >= 150.0f) &&
-                            (this->controlStickDirections[this->controlStickDataIndex] == 0)) {
-                            func_8083EC18(this, play, sTouchedWallFlags);
-                        } else if ((this->ledgeClimbType >= 2) && (this->yDistToLedge < 150.0f) &&
-                                   (((this->actor.world.pos.y - this->actor.floorHeight) + this->yDistToLedge) >
-                                    (70.0f * this->ageProperties->unk_08))) {
-                            AnimationContext_DisableQueue(play);
-                            if (this->stateFlags1 & PLAYER_STATE1_HOOKSHOT_FALLING) {
-                                Player_PlayVoiceSfx(this, NA_SE_VO_LI_HOOKSHOT_HANG);
-                            } else {
-                                Player_PlayVoiceSfx(this, NA_SE_VO_LI_HANG);
-                            }
-                            this->actor.world.pos.y += this->yDistToLedge;
-                            func_8083A5C4(play, this, this->actor.wallPoly, this->distToInteractWall,
-                                          GET_PLAYER_ANIM(PLAYER_ANIMGROUP_jump_climb_hold, this->modelAnimType));
-                            this->actor.shape.rot.y = this->yaw += 0x8000;
-                            this->stateFlags1 |= PLAYER_STATE1_HANGING_OFF_LEDGE;
+                        (this->linearVelocity > 0.0f) && (this->ledgeClimbType >= 2) &&
+                        (this->yDistToLedge < 150.0f) &&
+                        (((this->actor.world.pos.y - this->actor.floorHeight) + this->yDistToLedge) >
+                         (70.0f * this->ageProperties->unk_08))) {
+                        AnimationContext_DisableQueue(play);
+                        if (this->stateFlags1 & PLAYER_STATE1_HOOKSHOT_FALLING) {
+                            Player_PlayVoiceSfx(this, NA_SE_VO_LI_HOOKSHOT_HANG);
+                        } else {
+                            Player_PlayVoiceSfx(this, NA_SE_VO_LI_HANG);
                         }
+                        this->actor.world.pos.y += this->yDistToLedge;
+                        func_8083A5C4(play, this, this->actor.wallPoly, this->distToInteractWall,
+                                      GET_PLAYER_ANIM(PLAYER_ANIMGROUP_jump_climb_hold, this->modelAnimType));
+                        this->actor.shape.rot.y = this->yaw += 0x8000;
+                        this->stateFlags1 |= PLAYER_STATE1_HANGING_OFF_LEDGE;
                     }
                 }
             }
